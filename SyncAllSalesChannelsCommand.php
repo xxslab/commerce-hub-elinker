@@ -13,32 +13,17 @@ class SyncAllSalesChannelsCommand extends Command
 
     public function handle(): int
     {
-        $query = SalesChannel::query()
-            ->whereIn('type', [SalesChannel::TYPE_WOOCOMMERCE, SalesChannel::TYPE_ALLEGRO, SalesChannel::TYPE_EBAY])
-            ->where('is_enabled', true)
-            ->whereNotIn('sync_status', ['authentication_error', 'disabled']);
+        $query = SalesChannel::query()->where('type', 'woocommerce');
 
         if (!$this->option('force')) {
             $query->where(function ($q) {
-                $q->whereNull('sync_status')
-                    ->orWhere('sync_status', '!=', 'syncing')
-                    ->orWhere(function ($stale) {
-                        $stale->where('sync_status', 'syncing')
-                            ->where(function ($started) {
-                                $started->whereNull('last_sync_started_at')
-                                    ->orWhere('last_sync_started_at', '<', now()->subMinutes(20));
-                            });
-                    });
+                $q->whereNull('sync_status')->orWhere('sync_status', '!=', 'syncing');
             });
         }
 
         $count = 0;
         foreach ($query->get() as $channel) {
-            $channel->forceFill([
-                'sync_status' => 'syncing',
-                'last_sync_started_at' => now(),
-                'last_error' => null,
-            ])->save();
+            $channel->forceFill(['sync_status' => 'syncing', 'last_error' => null])->save();
             SyncSalesChannelOrdersJob::dispatch($channel->id);
             $count++;
         }

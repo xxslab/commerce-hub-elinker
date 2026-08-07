@@ -10,91 +10,87 @@ use Illuminate\Support\Facades\DB;
 
 class WooCommerceOrderSyncService
 {
-    public function sync(SalesChannel $channel): array
+    public function sync(SalesChannel $channel): int
     {
         $client = new WooCommerceClient($channel);
         $after = $channel->last_orders_sync_at
             ? $channel->last_orders_sync_at->toIso8601String()
             : now()->subDays(30)->toIso8601String();
+
         $page = 1;
-        $stats = ['fetched' => 0, 'created' => 0, 'updated' => 0];
+        $count = 0;
 
         do {
-            $orders = $client->getOrders(['after' => $after, 'page' => $page]);
+            $orders = $client->getOrders([
+                'after' => $after,
+                'page' => $page,
+            ]);
+
             foreach ($orders as $payload) {
-                $stats['fetched']++;
-                $stats[$this->upsertOrder($channel, $payload) ? 'created' : 'updated']++;
+                $this->upsertOrder($channel, $payload);
+                $count++;
             }
+
             $page++;
         } while (count($orders) === 50 && $page <= 50);
 
         $channel->forceFill([
             'last_orders_sync_at' => now(),
             'last_sync_at' => now(),
-            'last_sync_count' => $stats['fetched'],
+            'last_sync_count' => $count,
             'sync_status' => 'idle',
             'last_error' => null,
         ])->save();
 
-        return $stats;
+        return $count;
     }
 
-    private function upsertOrder(SalesChannel $channel, array $payload): bool
+    private function upsertOrder(SalesChannel $channel, array $payload): void
     {
-        return DB::transaction(function () use ($channel, $payload) {
+        DB::transaction(function () use ($channel, $payload) {
             $billing = $payload['billing'] ?? [];
             $shipping = $payload['shipping'] ?? [];
-            $externalId = (string) ($payload['id'] ?? $payload['number'] ?? '');
+            $externalId = (string)($payload['id'] ?? $payload['number'] ?? '');
+
             $order = CommerceOrder::updateOrCreate(
-                ['sales_channel_id' => $channel->id, 'external_order_id' => $externalId],
+                [
+                    'sales_channel_id' => $channel->id,
+                    'external_order_id' => $externalId,
+                ],
                 [
                     'company_id' => $channel->company_id,
                     'source' => 'woocommerce',
-                    'order_number' => (string) ($payload['number'] ?? $externalId),
-                    'external_order_number' => (string) ($payload['number'] ?? $externalId),
-                    'status_source' => (string) ($payload['status'] ?? ''),
-                    'status_normalized' => OrderStatusMapper::mapWoo((string) ($payload['status'] ?? '')),
-                    'currency' => (string) ($payload['currency'] ?? ''),
-                    'total' => (float) ($payload['total'] ?? 0),
-                    'products_total' => (float) ($payload['total'] ?? 0) - (float) ($payload['shipping_total'] ?? 0),
-                    'shipping_total' => (float) ($payload['shipping_total'] ?? 0),
-                    'discount_total' => (float) ($payload['discount_total'] ?? 0),
-                    'tax_total' => (float) ($payload['total_tax'] ?? 0),
+                    'order_number' => (string)($payload['number'] ?? $externalId),
+                    'status_source' => (string)($payload['status'] ?? ''),
+                    'status_normalized' => OrderStatusMapper::mapWoo((string)($payload['status'] ?? '')),
+                    'currency' => (string)($payload['currency'] ?? ''),
+                    'total' => (float)($payload['total'] ?? 0),
                     'payment_status' => !empty($payload['date_paid']) ? 'paid' : 'unknown',
+                    'shipping_status' => null,
                     'customer_name' => trim(($billing['first_name'] ?? '') . ' ' . ($billing['last_name'] ?? '')),
                     'customer_email' => $billing['email'] ?? null,
                     'customer_phone' => $billing['phone'] ?? null,
                     'billing_country' => $billing['country'] ?? null,
                     'shipping_country' => $shipping['country'] ?? null,
-                    'billing_address' => $billing,
-                    'shipping_address' => $shipping,
-                    'payment_method' => $payload['payment_method_title'] ?? ($payload['payment_method'] ?? null),
-                    'shipping_method' => $payload['shipping_lines'][0]['method_title'] ?? null,
-                    'customer_note' => $payload['customer_note'] ?? null,
                     'ordered_at' => $payload['date_created'] ?? now(),
-                    'source_updated_at' => $payload['date_modified'] ?? null,
-                    'raw_payload' => $payload,
-                    'last_synced_at' => now(),
+                    'raw_payload_json' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
                 ]
             );
 
             OrderItem::where('commerce_order_id', $order->id)->delete();
+
             foreach (($payload['line_items'] ?? []) as $item) {
                 OrderItem::create([
                     'commerce_order_id' => $order->id,
-                    'external_product_id' => (string) ($item['product_id'] ?? ''),
+                    'external_product_id' => (string)($item['product_id'] ?? ''),
                     'sku' => $item['sku'] ?? null,
                     'name' => $item['name'] ?? '',
-                    'quantity' => (int) ($item['quantity'] ?? 0),
-                    'price' => (float) ($item['price'] ?? 0),
-                    'tax' => (float) ($item['total_tax'] ?? 0),
-                    'total' => (float) ($item['total'] ?? 0),
-                    'variant' => $item['variation_id'] ?? null,
-                    'raw_payload' => $item,
+                    'quantity' => (int)($item['quantity'] ?? 0),
+                    'price' => (float)($item['price'] ?? 0),
+                    'tax' => (float)($item['total_tax'] ?? 0),
+                    'total' => (float)($item['total'] ?? 0),
                 ]);
             }
-
-            return $order->wasRecentlyCreated;
         });
     }
 }

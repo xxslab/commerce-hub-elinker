@@ -18,27 +18,8 @@ class WooCommerceClient
 
     public function testConnection(): bool
     {
-        return $this->testConnectionDetails()['ok'];
-    }
-
-    public function testConnectionDetails(): array
-    {
-        $base = trim((string) ($this->channel->base_url ?? ''));
-        $parsed = filter_var($base, FILTER_VALIDATE_URL);
-        if (! $parsed || ! str_starts_with(strtolower($base), 'https://')) {
-            return ['ok' => false, 'message' => 'URL sklepu musi być poprawnym adresem HTTPS.'];
-        }
-
-        try {
-            $response = $this->request()->get($this->url('/wp-json/wc/v3/orders'), ['per_page' => 1]);
-            if ($response->status() === 401 || $response->status() === 403) return ['ok' => false, 'message' => 'WooCommerce odrzucił klucz API. Sprawdź uprawnienia Read/Write oraz WAF.'];
-            if ($response->status() === 429) return ['ok' => false, 'message' => 'WooCommerce ograniczył liczbę żądań. Spróbuj ponownie później.'];
-            if (! $response->successful()) return ['ok' => false, 'message' => 'REST API WooCommerce zwróciło błąd HTTP ' . $response->status() . '.'];
-            return ['ok' => true, 'message' => 'Połączenie z WooCommerce REST API działa.'];
-        } catch (\Throwable $e) {
-            report($e);
-            return ['ok' => false, 'message' => 'Nie można połączyć się z WooCommerce. Sprawdź HTTPS, URL i blokady WAF.'];
-        }
+        $response = $this->request()->get($this->url('/wp-json/wc/v3/system_status'));
+        return $response->successful();
     }
 
     public function getOrders(array $params = []): array
@@ -82,6 +63,7 @@ class WooCommerceClient
         $credentials = $this->credentials();
 
         return Http::timeout(30)
+            ->retry(2, 1000)
             ->withBasicAuth($credentials['consumer_key'] ?? '', $credentials['consumer_secret'] ?? '')
             ->acceptJson();
     }
