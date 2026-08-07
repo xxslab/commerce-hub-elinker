@@ -1,1 +1,37 @@
 *.sqlite*
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Dependencies
+/vendor
+/node_modules
+
+# Laravel runtime/cache
+/storage/*.key
+/storage/framework/cache/data/*
+!/storage/framework/cache/data/.gitignore
+/storage/framework/sessions/*
+!/storage/framework/sessions/.gitignore
+/storage/framework/views/*
+!/storage/framework/views/.gitignore
+/storage/framework/testing/*
+!/storage/framework/testing/.gitignore
+/storage/logs/*.log
+/bootstrap/cache/*.php
+!/bootstrap/cache/.gitignore
+
+# IDE / OS
+.idea
+.vscode
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+/public/hot
+/public/storage
+/public/build
+npm-debug.log
+yarn-error.log
