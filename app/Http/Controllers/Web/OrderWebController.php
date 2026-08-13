@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Web;
 use App\Http\Controllers\Controller;
 use App\Models\CommerceOrder;
 use App\Models\OrderStatusHistory;
+use App\Models\SalesChannel;
 use App\Jobs\PushOrderStatusToSourceJob;
 use App\Services\Orders\OrderStatusMapper;
 use Illuminate\Http\Request;
@@ -13,8 +14,12 @@ class OrderWebController extends Controller
 {
     public function index(Request $request)
     {
+        $company = $this->company();
+
+        $channels = SalesChannel::where('company_id', $company->id)->orderBy('name')->get(['id', 'name', 'type']);
+
         $orders = CommerceOrder::query()
-            ->where('company_id', $this->company()->id)
+            ->where('company_id', $company->id)
             ->with(['salesChannel', 'shipments'])
             ->when($request->input('source'), fn ($q, $v) => $q->where('source', $v))
             ->when($request->input('channel_id'), fn ($q, $v) => $q->where('sales_channel_id', $v))
@@ -38,7 +43,7 @@ class OrderWebController extends Controller
             ->paginate(50)
             ->withQueryString();
 
-        return view('orders.index', compact('orders'));
+        return view('orders.index', compact('orders', 'channels'));
     }
 
     public function show(CommerceOrder $order)
@@ -46,7 +51,7 @@ class OrderWebController extends Controller
         abort_unless($order->company_id === $this->company()->id, 404);
 
         return view('orders.show', [
-            'order' => $order->load(['salesChannel', 'items', 'shipments', 'statusHistory']),
+            'order' => $order->load(['salesChannel', 'items', 'shipments.events', 'statusHistory']),
         ]);
     }
 
