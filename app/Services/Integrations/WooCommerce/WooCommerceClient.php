@@ -31,14 +31,17 @@ class WooCommerceClient
 
         try {
             $response = $this->request()->get($this->url('/wp-json/wc/v3/orders'), ['per_page' => 1]);
-            if ($response->status() === 401 || $response->status() === 403) return ['ok' => false, 'message' => 'WooCommerce odrzucił klucz API. Sprawdź uprawnienia Read/Write oraz WAF.'];
-            if ($response->status() === 429) return ['ok' => false, 'message' => 'WooCommerce ograniczył liczbę żądań. Spróbuj ponownie później.'];
-            if (! $response->successful()) return ['ok' => false, 'message' => 'REST API WooCommerce zwróciło błąd HTTP ' . $response->status() . '.'];
-            return ['ok' => true, 'message' => 'Połączenie z WooCommerce REST API działa.'];
+        } catch (\Illuminate\Http\Client\RequestException $e) {
+            $status = $e->response->status();
+            if ($status === 401 || $status === 403) return ['ok' => false, 'message' => 'WooCommerce odrzucił klucz API. Sprawdź uprawnienia Read/Write oraz WAF.'];
+            if ($status === 429) return ['ok' => false, 'message' => 'WooCommerce ograniczył liczbę żądań. Spróbuj ponownie później.'];
+            return ['ok' => false, 'message' => 'REST API WooCommerce zwróciło błąd HTTP ' . $status . '.'];
         } catch (\Throwable $e) {
             report($e);
             return ['ok' => false, 'message' => 'Nie można połączyć się z WooCommerce. Sprawdź HTTPS, URL i blokady WAF.'];
         }
+
+        return ['ok' => true, 'message' => 'Połączenie z WooCommerce REST API działa.'];
     }
 
     public function getOrders(array $params = []): array
@@ -82,6 +85,14 @@ class WooCommerceClient
         $credentials = $this->credentials();
 
         return Http::timeout(30)
+            ->retry(3, 1000, function (\Throwable $exception) {
+                // Do not retry on definitive client errors that will not change (bad credentials, bad request).
+                if ($exception instanceof \Illuminate\Http\Client\RequestException) {
+                    return ! in_array($exception->response->status(), [400, 401, 403, 404, 422], true);
+                }
+
+                return true;
+            })
             ->withBasicAuth($credentials['consumer_key'] ?? '', $credentials['consumer_secret'] ?? '')
             ->acceptJson();
     }

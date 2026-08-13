@@ -60,7 +60,13 @@ class AllegroClient
         $credentials = $this->channel->getCredentials();
 
         return Http::timeout(30)
-            ->retry(3, 500)
+            ->retry(3, 500, function (\Throwable $exception) {
+                if ($exception instanceof \Illuminate\Http\Client\RequestException) {
+                    return ! in_array($exception->response->status(), [400, 401, 403, 404, 422], true);
+                }
+
+                return true;
+            })
             ->withToken($credentials['access_token'] ?? '')
             ->withHeaders([
                 'Accept' => 'application/vnd.allegro.public.v1+json',
