@@ -32,6 +32,11 @@ class CommerceOrder extends Model
         return $this->hasMany(OrderItem::class);
     }
 
+    public function shipments()
+    {
+        return $this->hasMany(Shipment::class, 'commerce_order_id');
+    }
+
     public function statusHistory()
     {
         return $this->hasMany(OrderStatusHistory::class)->latest();
