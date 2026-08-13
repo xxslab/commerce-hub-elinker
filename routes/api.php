@@ -3,7 +3,14 @@
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\SalesChannelController;
 use App\Http\Controllers\ShipmentController;
+use App\Http\Controllers\WooCommerceWebhookController;
 use Illuminate\Support\Facades\Route;
+
+// Unauthenticated: WooCommerce cannot present a Sanctum token. Verified via
+// per-channel HMAC signature instead (see WooCommerceWebhookController).
+Route::post('/webhooks/woocommerce/{salesChannel}', [WooCommerceWebhookController::class, 'handle'])
+    ->name('webhooks.woocommerce')
+    ->middleware('throttle:60,1');
 
 Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/sales-channels', [SalesChannelController::class, 'index']);

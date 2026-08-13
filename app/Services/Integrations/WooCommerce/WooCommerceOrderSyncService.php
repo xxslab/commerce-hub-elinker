@@ -6,6 +6,7 @@ use App\Models\CommerceOrder;
 use App\Models\OrderItem;
 use App\Models\SalesChannel;
 use App\Services\Orders\OrderStatusMapper;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class WooCommerceOrderSyncService
@@ -23,7 +24,8 @@ class WooCommerceOrderSyncService
             $orders = $client->getOrders(['after' => $after, 'page' => $page]);
             foreach ($orders as $payload) {
                 $stats['fetched']++;
-                $stats[$this->upsertOrder($channel, $payload) ? 'created' : 'updated']++;
+                $order = $this->upsertOrder($channel, $payload);
+                $stats[$order->wasRecentlyCreated ? 'created' : 'updated']++;
             }
             $page++;
         } while (count($orders) === 50 && $page <= 50);
@@ -39,7 +41,30 @@ class WooCommerceOrderSyncService
         return $stats;
     }
 
-    private function upsertOrder(SalesChannel $channel, array $payload): bool
+    /**
+     * Apply a single webhook payload. Idempotent via the same
+     * (sales_channel_id, external_order_id) upsert key used by polling sync,
+     * with a guard against an out-of-order (stale) webhook delivery overwriting
+     * newer data already stored locally.
+     */
+    public function upsertFromWebhook(SalesChannel $channel, array $payload): CommerceOrder
+    {
+        $externalId = (string) ($payload['id'] ?? $payload['number'] ?? '');
+
+        $existing = CommerceOrder::where('sales_channel_id', $channel->id)
+            ->where('external_order_id', $externalId)
+            ->first();
+
+        if ($existing && $existing->source_updated_at && !empty($payload['date_modified'])) {
+            if (Carbon::parse($payload['date_modified'])->lt($existing->source_updated_at)) {
+                return $existing;
+            }
+        }
+
+        return $this->upsertOrder($channel, $payload);
+    }
+
+    public function upsertOrder(SalesChannel $channel, array $payload): CommerceOrder
     {
         return DB::transaction(function () use ($channel, $payload) {
             $billing = $payload['billing'] ?? [];
@@ -94,7 +119,7 @@ class WooCommerceOrderSyncService
                 ]);
             }
 
-            return $order->wasRecentlyCreated;
+            return $order;
         });
     }
 }
