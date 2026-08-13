@@ -8,11 +8,13 @@ Rozwijaj istniejącą aplikację Laravel Commerce Hub — panel do obsługi zam�
 
 - Laravel 8.x / PHP 8.1+.
 - Autoryzacja użytkowników, role i izolacja danych firm są wdrożone.
-- WooCommerce ma test połączenia, synchronizację idempotentną, mapowanie statusów i obsługę zamówień.
+- `/orders` to wspólna lista zamówień WooCommerce + Allegro + eBay (badge źródła, kanał, kraj, status realizacji/płatności, stan przesyłki i tracking, pełny zestaw filtrów).
+- WooCommerce ma test połączenia, synchronizację idempotentną (retry z backoffem, klasyfikacja błędów po statusie HTTP), mapowanie statusów, obsługę zamówień oraz zweryfikowany podpisem HMAC webhook (`/api/webhooks/woocommerce/{salesChannel}`), idempotentny wobec duplikatów i out-of-order dostaw.
 - Allegro i eBay mają warstwę OAuth, konektory, odświeżanie tokenów i synchronizację; pełne testy live wymagają danych API.
-- InPost ma obsługę przesyłek, etykiet i trackingu; pełne testy live wymagają tokena.
+- InPost ma obsługę przesyłek (kurier i Paczkomat), etykiet i trackingu, z ochroną przed podwójnym utworzeniem przesyłki (double-click); UI tworzenia/przeglądu przesyłki jest w szczegółach zamówienia. Pełne testy live wymagają tokena.
+- Komunikaty błędów synchronizacji (`SyncSalesChannelOrdersJob`) są przypisane do faktycznego providera (woocommerce_*/allegro_*/ebay_*), nie tylko WooCommerce.
 - Migracje, cache i autoloader zostały uruchomione na produkcji.
-- Testy aplikacji: 9 zaliczonych.
+- Testy aplikacji: 23 zaliczone (`php artisan test`).
 - `APP_DEBUG=false`, rejestracja publiczna jest wyłączona.
 
 ## Zasady pracy
@@ -28,10 +30,10 @@ Rozwijaj istniejącą aplikację Laravel Commerce Hub — panel do obsługi zam�
 
 ## Priorytety dalszego rozwoju
 
-1. Dokończyć produkcyjne testy OAuth Allegro/eBay po otrzymaniu danych aplikacji.
-2. Dodać testy kontraktowe konektorów i testy synchronizacji z mockami paginacji, timeoutów, rate limitów oraz duplikatów webhooków.
-3. Uporządkować scheduler i worker kolejki w Plesku; obecnie zadania są zdefiniowane, ale wymagają włączenia po stronie hostingu.
-4. Dodać bezpieczne zarządzanie webhookami WooCommerce i retry z backoffem.
+1. Dokończyć produkcyjne testy OAuth Allegro/eBay po otrzymaniu danych aplikacji (kod OAuth/refresh/connect/callback jest gotowy, ale nie zweryfikowany na żywym API).
+2. Dodać push trackingu do Allegro (`addShipment`) i eBay (`createShippingFulfillment`) zweryfikowany na żywym API — kod istnieje (`PushTrackingToSourceJob`), ale sprawdzony tylko przez kontrakt/typy, nie przez realną integrację.
+3. Rozszerzyć testy o paginację Allegro/eBay z mockami (WooCommerce i webhook mają już testy idempotencji/duplikatów), timeouty i HTTP 403/500.
+4. Uporządkować scheduler i worker kolejki w Plesku; obecnie zadania są zdefiniowane, ale wymagają włączenia po stronie hostingu.
 5. Rozszerzyć monitoring o alerty, metryki czasu synchronizacji i czytelne komunikaty dla administratora.
 6. Przed usunięciem któregokolwiek WordPressa uzyskać dokładne domeny/katalogi, wykonać backup i przygotować plan odtworzenia.
 
