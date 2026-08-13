@@ -67,17 +67,36 @@ class SyncSalesChannelOrdersJob implements ShouldQueue
             $this->finish($channel, 'idle', null, null, true, $run);
         } catch (RequestException $e) {
             $status = optional($e->response)->status();
-            $code = 'woocommerce_http_' . ($status ?: 'unknown');
+            $provider = $channel->type;
+            $label = $this->providerLabel($provider);
+            $code = $provider . '_http_' . ($status ?: 'unknown');
+
             if (in_array($status, [401, 403], true)) {
-                $this->finish($channel, 'authentication_error', 'woocommerce_authentication', 'Dane dostępowe WooCommerce są nieprawidłowe lub nie mają dostępu do REST API.', false, $run);
+                $this->finish($channel, 'authentication_error', $provider . '_authentication', "Dane dostępowe {$label} są nieprawidłowe lub nie mają wymaganych uprawnień.", false, $run);
                 return;
             }
-            $this->finish($channel, $status === 429 ? 'rate_limited' : 'error', $code, 'WooCommerce nie odpowiedział poprawnie. Sprawdź logi po identyfikatorze zdarzenia.', false, $run);
+
+            if ($status === 429) {
+                $this->finish($channel, 'rate_limited', $provider . '_rate_limited', "{$label} ograniczył liczbę żądań (rate limit). Synchronizacja zostanie ponowiona automatycznie.", false, $run);
+                throw $e;
+            }
+
+            $this->finish($channel, 'error', $code, "{$label} nie odpowiedział poprawnie (HTTP " . ($status ?: 'brak odpowiedzi') . "). Sprawdź logi po identyfikatorze zdarzenia.", false, $run);
             throw $e;
         } catch (\Throwable $e) {
-            $this->finish($channel, 'error', 'sync_failed', 'Synchronizacja nie powiodła się. Sprawdź logi po identyfikatorze zdarzenia.', false, $run);
+            $this->finish($channel, 'error', $channel->type . '_sync_failed', 'Synchronizacja nie powiodła się. Sprawdź logi po identyfikatorze zdarzenia.', false, $run);
             throw $e;
         }
+    }
+
+    private function providerLabel(?string $type): string
+    {
+        return match ($type) {
+            SalesChannel::TYPE_WOOCOMMERCE => 'WooCommerce',
+            SalesChannel::TYPE_ALLEGRO => 'Allegro',
+            SalesChannel::TYPE_EBAY => 'eBay',
+            default => 'Kanał sprzedaży',
+        };
     }
 
     public function failed(\Throwable $exception): void
