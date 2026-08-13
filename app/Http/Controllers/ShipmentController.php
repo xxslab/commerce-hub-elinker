@@ -20,6 +20,7 @@ class ShipmentController extends Controller
             'template' => ['nullable', 'string'],
             'weight' => ['nullable', 'numeric'],
             'service' => ['nullable', 'string'],
+            'point' => ['nullable', 'string', 'max:32'],
         ]);
 
         $shipment = app(InPostClient::class)->createShipment($order, $parcel);

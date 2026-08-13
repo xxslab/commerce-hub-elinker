@@ -16,7 +16,12 @@ class ShipmentWebController extends Controller
     public function createInPost(Request $request, CommerceOrder $order)
     {
         abort_unless($order->company_id === $this->company()->id, 404);
-        $data = $request->validate(['template' => ['nullable', 'string'], 'weight' => ['nullable', 'numeric'], 'service' => ['nullable', 'string']]);
+        $data = $request->validate([
+            'template' => ['nullable', 'string'],
+            'weight' => ['nullable', 'numeric'],
+            'service' => ['nullable', 'string'],
+            'point' => ['nullable', 'string', 'max:32'],
+        ]);
         try {
             app(InPostClient::class)->createShipment($order, $data);
             return back()->with('ok', 'Przesyłka InPost utworzona.');

@@ -6,29 +6,47 @@ use App\Models\CommerceOrder;
 use App\Models\Shipment;
 use App\Models\ShippingLabel;
 use App\Models\ShipmentEvent;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 
 class InPostClient
 {
+    /**
+     * Idempotent: returns the existing active InPost shipment for this order
+     * instead of creating a duplicate if one was already created (e.g. double click).
+     */
     public function createShipment(CommerceOrder $order, array $parcel = []): Shipment
     {
-        $payload = $this->buildShipmentPayload($order, $parcel);
+        $lock = Cache::lock('inpost-create-shipment:' . $order->id, 30);
 
-        $response = $this->request()->post($this->apiUrl('/v1/organizations/' . config('commerce-hub.inpost.organization_id') . '/shipments'), $payload);
-        $response->throw();
-        $data = $response->json();
+        return $lock->block(10, function () use ($order, $parcel) {
+            $existing = Shipment::where('commerce_order_id', $order->id)
+                ->where('carrier', 'inpost')
+                ->whereNotIn('status', ['CANCELLED', 'ERROR'])
+                ->first();
 
-        return Shipment::create([
-            'company_id' => $order->company_id,
-            'commerce_order_id' => $order->id,
-            'carrier' => 'inpost',
-            'external_shipment_id' => (string) ($data['id'] ?? ''),
-            'tracking_number' => $data['tracking_number'] ?? null,
-            'status' => strtoupper($data['status'] ?? 'CREATED'),
-            'request_payload' => $payload,
-            'raw_payload' => $data,
-        ]);
+            if ($existing) {
+                return $existing;
+            }
+
+            $payload = $this->buildShipmentPayload($order, $parcel);
+
+            $response = $this->request()->post($this->apiUrl('/v1/organizations/' . config('commerce-hub.inpost.organization_id') . '/shipments'), $payload);
+            $response->throw();
+            $data = $response->json();
+
+            return Shipment::create([
+                'company_id' => $order->company_id,
+                'commerce_order_id' => $order->id,
+                'carrier' => 'inpost',
+                'external_shipment_id' => (string) ($data['id'] ?? ''),
+                'tracking_number' => $data['tracking_number'] ?? null,
+                'status' => strtoupper($data['status'] ?? 'CREATED'),
+                'request_payload' => $payload,
+                'raw_payload' => $data,
+            ]);
+        });
     }
 
     public function downloadLabel(Shipment $shipment, string $format = 'pdf'): Shipment
@@ -79,28 +97,41 @@ class InPostClient
     private function buildShipmentPayload(CommerceOrder $order, array $parcel): array
     {
         $address = $order->shipping_address ?? [];
+        $point = trim((string) ($parcel['point'] ?? ''));
+        $isLocker = $point !== '';
 
-        return [
-            'receiver' => [
-                'name' => $order->customer_name,
-                'email' => $order->customer_email,
-                'phone' => $order->customer_phone,
-                'address' => [
-                    'street' => trim(($address['address_1'] ?? '') . ' ' . ($address['address_2'] ?? '')),
-                    'building_number' => $address['building_number'] ?? '',
-                    'city' => $address['city'] ?? '',
-                    'post_code' => $address['postcode'] ?? '',
-                    'country_code' => $address['country'] ?? 'PL',
-                ],
-            ],
+        $receiver = [
+            'name' => $order->customer_name,
+            'email' => $order->customer_email,
+            'phone' => $order->customer_phone,
+        ];
+
+        if (! $isLocker) {
+            $receiver['address'] = [
+                'street' => trim(($address['address_1'] ?? '') . ' ' . ($address['address_2'] ?? '')),
+                'building_number' => $address['building_number'] ?? '',
+                'city' => $address['city'] ?? '',
+                'post_code' => $address['postcode'] ?? '',
+                'country_code' => $address['country'] ?? 'PL',
+            ];
+        }
+
+        $payload = [
+            'receiver' => $receiver,
             'parcels' => [[
                 'template' => $parcel['template'] ?? 'small',
                 'weight' => ['amount' => $parcel['weight'] ?? 1, 'unit' => 'kg'],
             ]],
-            'service' => $parcel['service'] ?? 'inpost_courier_standard',
+            'service' => $parcel['service'] ?? ($isLocker ? 'inpost_locker_standard' : 'inpost_courier_standard'),
             'reference' => $order->order_number,
             'comments' => 'Commerce Hub order #' . $order->order_number,
         ];
+
+        if ($isLocker) {
+            $payload['custom_attributes'] = ['target_point' => $point];
+        }
+
+        return $payload;
     }
 
     private function request()
