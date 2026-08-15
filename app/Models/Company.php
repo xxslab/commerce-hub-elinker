@@ -9,6 +9,11 @@ class Company extends Model
 {
     protected $fillable = ['name', 'tax_id', 'email'];
 
+    protected $casts = [
+        'entitlement_features' => 'array',
+        'entitlement_checked_at' => 'datetime',
+    ];
+
     public function salesChannels(): HasMany
     {
         return $this->hasMany(SalesChannel::class);
