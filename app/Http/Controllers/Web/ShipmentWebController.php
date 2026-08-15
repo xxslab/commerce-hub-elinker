@@ -27,7 +27,7 @@ class ShipmentWebController extends Controller
             return back()->with('ok', 'Przesyłka InPost utworzona.');
         } catch (\Throwable $e) {
             report($e);
-            return back()->with('error', 'Nie udało się utworzyć przesyłki InPost. Sprawdź konfigurację i logi.');
+            return back()->with('error', $e instanceof \RuntimeException ? $e->getMessage() : 'Nie udało się utworzyć przesyłki InPost. Sprawdź konfigurację i logi.');
         }
     }
 
@@ -39,7 +39,7 @@ class ShipmentWebController extends Controller
             return Storage::download($shipment->label_path);
         } catch (\Throwable $e) {
             report($e);
-            return back()->with('error', 'Nie udało się pobrać etykiety. Sprawdź konfigurację i logi.');
+            return back()->with('error', $e instanceof \RuntimeException ? $e->getMessage() : 'Nie udało się pobrać etykiety. Sprawdź konfigurację i logi.');
         }
     }
 
