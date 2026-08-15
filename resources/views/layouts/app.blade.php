@@ -21,6 +21,7 @@
     <a href="{{ route('orders.index') }}">Zamówienia</a>
     <a href="{{ route('queue.index') }}">Kolejka</a>
     <a href="{{ route('channels.index') }}">Kanały</a>
+    <a href="{{ route('settings.billing') }}">Ustawienia</a>
     @auth
         <span style="float:right">{{ auth()->user()->maskedEmail() }}
         <form method="post" action="{{ route('logout') }}" style="display:inline">@csrf<button type="submit">Wyloguj</button></form></span>
