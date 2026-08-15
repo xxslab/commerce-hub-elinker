@@ -12,6 +12,11 @@ class Kernel extends ConsoleKernel
         $schedule->command('commerce-hub:sync-orders')->everyFiveMinutes()->withoutOverlapping();
         $schedule->command('commerce-hub:refresh-marketplace-tokens')->hourly()->withoutOverlapping();
         $schedule->command('commerce-hub:sync-tracking')->everyFifteenMinutes()->withoutOverlapping();
+
+        $entitlementInterval = max(1, (int) config('commerce-hub.license_hub.refresh_interval_minutes', 60));
+        $schedule->command('commerce-hub:sync-entitlement')
+            ->cron(sprintf('*/%d * * * *', $entitlementInterval))
+            ->withoutOverlapping();
     }
 
     protected function commands(): void
