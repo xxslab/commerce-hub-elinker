@@ -133,7 +133,24 @@ Scheduler odpala:
 ```text
 commerce-hub:sync-orders co 5 minut
 commerce-hub:sync-tracking co 15 minut
+commerce-hub:refresh-marketplace-tokens co godzinę
+commerce-hub:sync-entitlement co LICENSE_HUB_REFRESH_INTERVAL minut (domyślnie 60)
 ```
+
+## 7a. License Hub (billing)
+
+Opcjonalne, dopóki nie chcesz egzekwować limitów planu. W `.env`:
+
+```env
+LICENSE_HUB_URL=https://license.dosieci.pl
+LICENSE_HUB_KEY_ID=
+LICENSE_HUB_SECRET=
+LICENSE_HUB_ENFORCE_GATING=false
+```
+
+`LICENSE_HUB_KEY_ID`/`LICENSE_HUB_SECRET` muszą być zgodne z `DOSIECI_SIGNING_KEY_ID`/`DOSIECI_SIGNING_SECRET` skonfigurowanym po stronie License Hub (ten sam statyczny klucz, którego już używają WHMCS-connector/storefront-connector — patrz `DosieciServiceProvider` w repo License Hub). Bez tych zmiennych `/settings/billing` po prostu nie odświeży stanu konta (błąd łagodnie zalogowany, nic nie blokuje panelu).
+
+Powiązanie firmy z workspace: admin firmy wchodzi w **Ustawienia → Plan i billing** i wpisuje `workspace_id` otrzymany od DoSieci. `LICENSE_HUB_ENFORCE_GATING=false` (domyślnie) oznacza, że nic nie jest jeszcze blokowane — włącz dopiero po realnym powiązaniu firm i zasileniu katalogu planów po stronie License Hub.
 
 ## 8. Co działa teraz
 
