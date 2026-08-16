@@ -9,6 +9,7 @@ use App\Services\Licensing\LicenseHubClient;
 use App\Services\Licensing\LicenseHubUnavailableException;
 use App\Services\Licensing\SubscriptionEntitlementService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Mockery;
 use Tests\TestCase;
 
@@ -268,5 +269,67 @@ class SubscriptionEntitlementTest extends TestCase
 
         $service->assertAllowed($company, FeatureKeys::CHANNEL_ALLEGRO);
         $this->addToAssertionCount(1);
+    }
+
+    /**
+     * A suspension is a status flag only -- nothing in this codebase ever
+     * deletes a company's orders/sales_channels/shipments in reaction to
+     * it. Proven directly here rather than only inferred from "no code
+     * path does this": a refresh that lands the company on "suspended"
+     * must leave its existing commercial data completely untouched.
+     */
+    public function test_a_refresh_that_suspends_a_company_does_not_touch_its_orders_or_channels(): void
+    {
+        $company = $this->makeCompany('q@example.test', ['license_hub_workspace_id' => '1006']);
+        $channel = $company->salesChannels()->create(['type' => 'woocommerce', 'name' => 'Sklep', 'status' => 'active']);
+        $order = $company->orders()->create([
+            'sales_channel_id' => $channel->id,
+            'external_order_id' => 'ext-suspend-1',
+            'source' => 'woocommerce',
+            'total' => 42,
+            'currency' => 'PLN',
+        ]);
+
+        $client = Mockery::mock(LicenseHubClient::class);
+        $client->shouldReceive('checkEntitlement')->once()->with('1006')->andReturn([
+            'active' => false, 'status' => 'suspended', 'plan_code' => 'pro', 'features' => [],
+        ]);
+
+        $this->service($client)->refresh($company);
+
+        self::assertSame('suspended', $company->fresh()->entitlement_status);
+        self::assertDatabaseHas('sales_channels', ['id' => $channel->id]);
+        self::assertDatabaseHas('commerce_orders', ['id' => $order->id]);
+    }
+
+    /**
+     * A malformed response is surfaced by LicenseHubClient as
+     * LicenseHubUnavailableException (see LicenseHubClientTest) -- this
+     * test proves that all the way through the real HTTP stack (not a
+     * mocked client), refresh() still leaves the company's last known-good
+     * status/plan_code exactly as they were, only sync_status flips to
+     * degraded.
+     */
+    public function test_a_malformed_entitlement_response_through_the_real_client_does_not_change_last_known_good_state(): void
+    {
+        config([
+            'commerce-hub.license_hub.url' => 'https://license.example.test',
+            'commerce-hub.license_hub.key_id' => 'elinker-key',
+            'commerce-hub.license_hub.secret' => 'elinker-secret',
+        ]);
+        $company = $this->makeCompany('r@example.test', [
+            'license_hub_workspace_id' => '1007',
+            'entitlement_status' => 'active',
+            'entitlement_plan_code' => 'pro',
+        ]);
+        Http::fake(['license.example.test/*' => Http::response(['unexpected' => 'shape'], 200)]);
+
+        $service = new SubscriptionEntitlementService(new LicenseHubClient());
+        $service->refresh($company);
+
+        $fresh = $company->fresh();
+        self::assertSame('active', $fresh->entitlement_status);
+        self::assertSame('pro', $fresh->entitlement_plan_code);
+        self::assertSame('degraded', $fresh->entitlement_sync_status);
     }
 }
