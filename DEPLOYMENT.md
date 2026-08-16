@@ -16,8 +16,9 @@ own `DEPLOYMENT.md`, covering `license.dosieci.pl` on the same Plesk pattern.
 ## Production deployment record — 2026-08-16
 
 - Target: `https://elink.dosieci.pl`
-- Production SHA: `6522f4c3c70c599bddae2b646ff829b2d738655b`
-- Previous rollback reference: `75b94197322316448306be9fc5384c1895880452` (the live tree also had an uncommitted `Kernel.php` divergence).
+- Base verified SHA: `6522f4c3c70c599bddae2b646ff829b2d738655b`
+- Production SHA: `ab42bf748d29c03f0d3a34f5a40f11300bd07eae` (hotfix: read encrypted WooCommerce credentials through `SalesChannel::getCredentials()`).
+- Previous rollback reference: `6522f4c3c70c599bddae2b646ff829b2d738655b` (the original live tree also had an uncommitted `Kernel.php` divergence).
 - Migrations: PASS; additive migrations ran successfully.
 - Login/routing: PASS (`/login` HTTP 200; protected routes redirect to login).
 - Scheduler: PASS; explicit `current` release path with PHP 8.1.
