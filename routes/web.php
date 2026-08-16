@@ -54,6 +54,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/shipments/{shipment}/push-tracking', [ShipmentWebController::class, 'pushTracking'])->name('shipments.pushTracking');
 
     Route::get('/settings/billing', [BillingSettingsController::class, 'show'])->name('settings.billing');
-    Route::post('/settings/billing/link', [BillingSettingsController::class, 'link'])->middleware('company.admin')->name('settings.billing.link');
+    Route::post('/settings/billing/connect', [BillingSettingsController::class, 'connect'])->middleware('company.admin')->name('settings.billing.connect');
+    Route::post('/settings/billing/disconnect', [BillingSettingsController::class, 'disconnect'])->middleware('company.admin')->name('settings.billing.disconnect');
     Route::post('/settings/billing/refresh', [BillingSettingsController::class, 'refresh'])->middleware('company.admin')->name('settings.billing.refresh');
 });

@@ -23,4 +23,9 @@ class Company extends Model
     {
         return $this->hasMany(CommerceOrder::class);
     }
+
+    public function billingAuditLogs(): HasMany
+    {
+        return $this->hasMany(CompanyBillingAuditLog::class);
+    }
 }

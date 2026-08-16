@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Services\Licensing\LicenseHubClient;
 use App\Services\Licensing\LicenseHubUnavailableException;
+use App\Services\Licensing\ProductLinkRejectedException;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -96,5 +97,65 @@ class LicenseHubClientTest extends TestCase
 
         $this->expectException(LicenseHubUnavailableException::class);
         (new LicenseHubClient())->checkEntitlement('1001');
+    }
+
+    public function test_consume_product_link_returns_the_resolved_workspace_id(): void
+    {
+        Http::fake(['license.example.test/*' => Http::response(['workspace_id' => '3001'], 200)]);
+
+        $workspaceId = (new LicenseHubClient())->consumeProductLink('a-valid-code');
+
+        self::assertSame('3001', $workspaceId);
+    }
+
+    public function test_consume_product_link_sends_the_product_and_token_signed(): void
+    {
+        Http::fake(['license.example.test/*' => Http::response(['workspace_id' => '3001'], 200)]);
+
+        (new LicenseHubClient())->consumeProductLink('a-valid-code');
+
+        Http::assertSent(function ($request) {
+            $body = json_decode($request->body(), true);
+
+            return $request->url() === 'https://license.example.test/api/v1/product-links/consume'
+                && $body['product'] === 'elinker'
+                && $body['token'] === 'a-valid-code'
+                && $request->hasHeader('X-DoSieci-Signature');
+        });
+    }
+
+    public function test_consume_product_link_422_throws_rejected_exception(): void
+    {
+        Http::fake(['license.example.test/*' => Http::response(['error' => 'Token already used.'], 422)]);
+
+        $this->expectException(ProductLinkRejectedException::class);
+        $this->expectExceptionMessage('Token already used.');
+        (new LicenseHubClient())->consumeProductLink('used-code');
+    }
+
+    public function test_consume_product_link_5xx_throws_unavailable_exception_not_rejected(): void
+    {
+        Http::fake(['license.example.test/*' => Http::response(['error' => 'internal'], 500)]);
+
+        $this->expectException(LicenseHubUnavailableException::class);
+        (new LicenseHubClient())->consumeProductLink('some-code');
+    }
+
+    public function test_consume_product_link_malformed_response_throws_unavailable_exception(): void
+    {
+        Http::fake(['license.example.test/*' => Http::response(['unexpected' => 'shape'], 200)]);
+
+        $this->expectException(LicenseHubUnavailableException::class);
+        (new LicenseHubClient())->consumeProductLink('some-code');
+    }
+
+    public function test_consume_product_link_connection_timeout_throws_unavailable_exception(): void
+    {
+        Http::fake(function () {
+            throw new \Illuminate\Http\Client\ConnectionException('Connection timed out');
+        });
+
+        $this->expectException(LicenseHubUnavailableException::class);
+        (new LicenseHubClient())->consumeProductLink('some-code');
     }
 }

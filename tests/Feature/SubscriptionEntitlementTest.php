@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\Company;
+use App\Services\Licensing\FeatureKeys;
+use App\Services\Licensing\FeatureNotAllowedException;
 use App\Services\Licensing\LicenseHubClient;
 use App\Services\Licensing\LicenseHubUnavailableException;
 use App\Services\Licensing\SubscriptionEntitlementService;
@@ -139,5 +141,132 @@ class SubscriptionEntitlementTest extends TestCase
         $service = $this->service(Mockery::mock(LicenseHubClient::class));
 
         self::assertTrue($service->isActive($company));
+    }
+
+    public function test_can_is_always_true_when_gating_is_not_applicable(): void
+    {
+        $company = $this->makeCompany('h@example.test');
+        config(['commerce-hub.license_hub.enforce_gating' => true]);
+
+        $service = $this->service(Mockery::mock(LicenseHubClient::class));
+
+        self::assertTrue($service->can($company, FeatureKeys::CHANNEL_WOOCOMMERCE));
+    }
+
+    public function test_can_default_denies_an_unmapped_feature_key(): void
+    {
+        $company = $this->makeCompany('i@example.test', [
+            'license_hub_workspace_id' => '2001',
+            'entitlement_status' => 'active',
+            'entitlement_features' => [],
+        ]);
+        config(['commerce-hub.license_hub.enforce_gating' => true]);
+
+        $service = $this->service(Mockery::mock(LicenseHubClient::class));
+
+        self::assertFalse($service->can($company, FeatureKeys::CHANNEL_WOOCOMMERCE));
+    }
+
+    public function test_can_is_true_for_an_enabled_boolean_feature(): void
+    {
+        $company = $this->makeCompany('j@example.test', [
+            'license_hub_workspace_id' => '2002',
+            'entitlement_status' => 'active',
+            'entitlement_features' => [FeatureKeys::SYNC => ['type' => 'boolean', 'enabled' => true]],
+        ]);
+        config(['commerce-hub.license_hub.enforce_gating' => true]);
+
+        $service = $this->service(Mockery::mock(LicenseHubClient::class));
+
+        self::assertTrue($service->can($company, FeatureKeys::SYNC));
+    }
+
+    public function test_can_is_false_for_a_disabled_boolean_feature(): void
+    {
+        $company = $this->makeCompany('k@example.test', [
+            'license_hub_workspace_id' => '2003',
+            'entitlement_status' => 'active',
+            'entitlement_features' => [FeatureKeys::SYNC => ['type' => 'boolean', 'enabled' => false]],
+        ]);
+        config(['commerce-hub.license_hub.enforce_gating' => true]);
+
+        $service = $this->service(Mockery::mock(LicenseHubClient::class));
+
+        self::assertFalse($service->can($company, FeatureKeys::SYNC));
+    }
+
+    public function test_can_respects_a_limit_type_feature_with_remaining_room(): void
+    {
+        $company = $this->makeCompany('l@example.test', [
+            'license_hub_workspace_id' => '2004',
+            'entitlement_status' => 'active',
+            'entitlement_features' => [FeatureKeys::CHANNEL_WOOCOMMERCE => ['type' => 'limit', 'limit' => 3, 'usage' => 2, 'unlimited' => false]],
+        ]);
+        config(['commerce-hub.license_hub.enforce_gating' => true]);
+
+        $service = $this->service(Mockery::mock(LicenseHubClient::class));
+
+        self::assertTrue($service->can($company, FeatureKeys::CHANNEL_WOOCOMMERCE));
+        self::assertSame(3, $service->limit($company, FeatureKeys::CHANNEL_WOOCOMMERCE));
+        self::assertSame(2, $service->usage($company, FeatureKeys::CHANNEL_WOOCOMMERCE));
+    }
+
+    public function test_can_is_false_once_a_limit_type_feature_is_exhausted(): void
+    {
+        $company = $this->makeCompany('m@example.test', [
+            'license_hub_workspace_id' => '2005',
+            'entitlement_status' => 'active',
+            'entitlement_features' => [FeatureKeys::CHANNEL_WOOCOMMERCE => ['type' => 'limit', 'limit' => 3, 'usage' => 3, 'unlimited' => false]],
+        ]);
+        config(['commerce-hub.license_hub.enforce_gating' => true]);
+
+        $service = $this->service(Mockery::mock(LicenseHubClient::class));
+
+        self::assertFalse($service->can($company, FeatureKeys::CHANNEL_WOOCOMMERCE));
+    }
+
+    public function test_can_is_true_for_an_unlimited_limit_type_feature(): void
+    {
+        $company = $this->makeCompany('n@example.test', [
+            'license_hub_workspace_id' => '2006',
+            'entitlement_status' => 'active',
+            'entitlement_features' => [FeatureKeys::CHANNEL_WOOCOMMERCE => ['type' => 'limit', 'limit' => null, 'usage' => 9999, 'unlimited' => true]],
+        ]);
+        config(['commerce-hub.license_hub.enforce_gating' => true]);
+
+        $service = $this->service(Mockery::mock(LicenseHubClient::class));
+
+        self::assertTrue($service->can($company, FeatureKeys::CHANNEL_WOOCOMMERCE));
+        self::assertNull($service->limit($company, FeatureKeys::CHANNEL_WOOCOMMERCE));
+    }
+
+    public function test_assert_allowed_throws_when_not_allowed(): void
+    {
+        $company = $this->makeCompany('o@example.test', [
+            'license_hub_workspace_id' => '2007',
+            'entitlement_status' => 'active',
+            'entitlement_features' => [],
+        ]);
+        config(['commerce-hub.license_hub.enforce_gating' => true]);
+
+        $service = $this->service(Mockery::mock(LicenseHubClient::class));
+
+        $this->expectException(FeatureNotAllowedException::class);
+        $service->assertAllowed($company, FeatureKeys::CHANNEL_ALLEGRO);
+    }
+
+    public function test_assert_allowed_does_not_throw_when_allowed(): void
+    {
+        $company = $this->makeCompany('p@example.test', [
+            'license_hub_workspace_id' => '2008',
+            'entitlement_status' => 'active',
+            'entitlement_features' => [FeatureKeys::CHANNEL_ALLEGRO => ['type' => 'boolean', 'enabled' => true]],
+        ]);
+        config(['commerce-hub.license_hub.enforce_gating' => true]);
+
+        $service = $this->service(Mockery::mock(LicenseHubClient::class));
+
+        $service->assertAllowed($company, FeatureKeys::CHANNEL_ALLEGRO);
+        $this->addToAssertionCount(1);
     }
 }

@@ -85,4 +85,86 @@ class SubscriptionEntitlementService
 
         return $features[$key] ?? null;
     }
+
+    /**
+     * Whether $key is currently allowed for $company. Always true while
+     * gating isn't applicable (see isGatingApplicable) — the master switch
+     * and per-company linkage guard every one of these methods exactly as
+     * they guard isActive(), so a feature key never becomes a second,
+     * inconsistent gating path.
+     *
+     * Default-deny: a feature key with no matching plan_features row
+     * (unmapped) resolves to false, same as License Hub's own
+     * EntitlementService::can() — an admin must explicitly grant a
+     * feature, nothing is implicitly allowed.
+     *
+     * For a "limit" type feature, "allowed" means there is still room
+     * under the limit (usage < limit) or the feature is unlimited — it
+     * does NOT mean the feature is merely present. Use limit()/usage() to
+     * inspect the raw numbers.
+     */
+    public function can(Company $company, string $key): bool
+    {
+        if (!$this->isGatingApplicable($company)) {
+            return true;
+        }
+
+        $feature = $this->feature($company, $key);
+        if ($feature === null) {
+            return false;
+        }
+
+        if (($feature['type'] ?? null) === 'boolean') {
+            return (bool) ($feature['enabled'] ?? false);
+        }
+
+        if ($feature['unlimited'] ?? false) {
+            return true;
+        }
+
+        return (int) ($feature['usage'] ?? 0) < (int) ($feature['limit'] ?? 0);
+    }
+
+    /**
+     * The numeric limit for a "limit"-type feature key, or null when
+     * unlimited or when gating isn't applicable (no ceiling to report).
+     * Returns 0 for an unmapped/boolean-type key — never null, so callers
+     * can't mistake "not configured" for "unlimited".
+     */
+    public function limit(Company $company, string $key): ?int
+    {
+        if (!$this->isGatingApplicable($company)) {
+            return null;
+        }
+
+        $feature = $this->feature($company, $key);
+        if ($feature === null || ($feature['type'] ?? null) !== 'limit') {
+            return 0;
+        }
+
+        return ($feature['unlimited'] ?? false) ? null : (int) ($feature['limit'] ?? 0);
+    }
+
+    public function usage(Company $company, string $key): int
+    {
+        $feature = $this->feature($company, $key);
+
+        return (int) ($feature['usage'] ?? 0);
+    }
+
+    /**
+     * Throws when $key is not allowed for $company. Intended for the one
+     * or two genuinely gated write actions (new sales channel, new sync,
+     * new InPost shipment) rather than being sprinkled through view logic
+     * — see EnsureActiveSubscription, which is the actual enforcement
+     * point and calls this.
+     *
+     * @throws FeatureNotAllowedException
+     */
+    public function assertAllowed(Company $company, string $key): void
+    {
+        if (!$this->can($company, $key)) {
+            throw new FeatureNotAllowedException("Feature not allowed for company {$company->id}: {$key}");
+        }
+    }
 }
