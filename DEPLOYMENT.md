@@ -16,7 +16,7 @@ own `DEPLOYMENT.md`, covering `license.dosieci.pl` on the same Plesk pattern.
 ## Production deployment record — 2026-08-16
 
 - Target: `https://elink.dosieci.pl`
-- Production SHA: `6522f4c3c70c599bddae2b646ff829b2d738655b8`
+- Production SHA: `6522f4c3c70c599bddae2b646ff829b2d738655b`
 - Previous rollback reference: `75b94197322316448306be9fc5384c1895880452` (the live tree also had an uncommitted `Kernel.php` divergence).
 - Migrations: PASS; additive migrations ran successfully.
 - Login/routing: PASS (`/login` HTTP 200; protected routes redirect to login).
