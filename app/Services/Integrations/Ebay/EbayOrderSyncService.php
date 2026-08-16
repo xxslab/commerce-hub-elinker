@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\DB;
 
 class EbayOrderSyncService
 {
-    public function sync(SalesChannel $channel): int
+    public function sync(SalesChannel $channel): array
     {
         $client = new EbayClient($channel);
         $orders = [];
@@ -22,16 +22,20 @@ class EbayOrderSyncService
             $offset += count($page);
         } while (count($page) === 200 && $offset < 10000);
 
-        foreach ($orders as $payload) $this->upsertOrder($channel, $payload);
+        $stats = ['fetched' => count($orders), 'created' => 0, 'updated' => 0];
+        foreach ($orders as $payload) {
+            $order = $this->upsertOrder($channel, $payload);
+            $stats[$order->wasRecentlyCreated ? 'created' : 'updated']++;
+        }
 
         $channel->forceFill(['last_orders_sync_at' => now()])->save();
 
-        return count($orders);
+        return $stats;
     }
 
-    private function upsertOrder(SalesChannel $channel, array $payload): void
+    public function upsertOrder(SalesChannel $channel, array $payload): CommerceOrder
     {
-        DB::transaction(function () use ($channel, $payload) {
+        return DB::transaction(function () use ($channel, $payload) {
             $buyer = $payload['buyer'] ?? [];
             $pricing = $payload['pricingSummary']['total'] ?? [];
             $fulfillmentStatus = $payload['orderFulfillmentStatus'] ?? null;
@@ -74,6 +78,8 @@ class EbayOrderSyncService
                     'raw_payload' => $item,
                 ]);
             }
+
+            return $order;
         });
     }
 }

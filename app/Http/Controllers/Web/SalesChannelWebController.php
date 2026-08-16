@@ -7,6 +7,7 @@ use App\Jobs\SyncSalesChannelOrdersJob;
 use App\Models\SalesChannel;
 use App\Services\Integrations\SalesChannelConnectorResolver;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 class SalesChannelWebController extends Controller
 {
@@ -38,8 +39,9 @@ class SalesChannelWebController extends Controller
             'sync_status' => 'idle',
         ]);
         $channel->setCredentials(['consumer_key' => $data['consumer_key'], 'consumer_secret' => $data['consumer_secret']]);
+        $channel->setWebhookSecret(Str::random(40));
         $channel->save();
-        return redirect()->route('channels.index')->with('ok', 'Kanał WooCommerce dodany. Uruchom test połączenia.');
+        return redirect()->route('channels.index')->with('ok', 'Kanał WooCommerce dodany. Uruchom test połączenia i skonfiguruj webhook (adres poniżej listy kanałów).');
     }
 
     public function test(SalesChannel $salesChannel)

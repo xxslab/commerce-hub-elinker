@@ -48,15 +48,21 @@ Core:
 ## Kolejny etap developmentu
 
 ```text
-1. Dokończyć OAuth Allegro: redirect + callback + token refresh.
-2. Dokończyć OAuth eBay: redirect + callback + token refresh.
-3. Dodać ekrany dodawania Allegro/eBay.
-4. Dodać realne mapowanie statusów Allegro/eBay.
-5. Dodać update statusu do źródła, nie tylko lokalnie.
-6. Dodać drugi carrier: DPD albo DHL.
-7. Dodać faktury/Fakturownia.
+1. Zweryfikować OAuth Allegro/eBay na żywym API (kod gotowy, brak testów live).
+2. Zweryfikować push trackingu do Allegro/eBay na żywym API.
+3. Dodać drugi carrier: DPD albo DHL.
+4. Dodać faktury/Fakturownia.
 ```
 
+## v1.5 Wspólna lista zamówień, webhooki WooCommerce, idempotencja InPost
+
+- `/orders` jako wspólna lista WooCommerce + Allegro + eBay: badge źródła, kanał, kraj, status płatności, stan przesyłki, tracking, pełne filtry.
+- Szczegóły zamówienia: sekcja przesyłki (etykieta, tracking) i formularz tworzenia przesyłki InPost (kurier/Paczkomat), idempotentny wobec podwójnego kliknięcia.
+- Bezpieczny webhook WooCommerce (`POST /api/webhooks/woocommerce/{salesChannel}`, podpis HMAC-SHA256, idempotentny).
+- Komunikaty błędów synchronizacji przypisane do faktycznego providera, nie zawsze WooCommerce.
+- Naprawiono dwa realne błędy 500: brak relacji `CommerceOrder::shipments()` oraz brak castu `array` na `OrderItem::raw_payload`.
+
+Szczegóły: `CHANGELOG.md`.
 
 ## v1.2 Marketplace OAuth
 

@@ -24,7 +24,7 @@ class PushTrackingToSourceJob implements ShouldQueue
 
     public function handle(): void
     {
-        $shipment = Shipment::with('order.salesChannel')->findOrFail($this->shipmentId);
+        $shipment = Shipment::with(['order.salesChannel', 'order.items'])->findOrFail($this->shipmentId);
         $order = $shipment->order;
         $channel = $order->salesChannel;
 
@@ -32,15 +32,17 @@ class PushTrackingToSourceJob implements ShouldQueue
             return;
         }
 
+        $carrierName = $shipment->carrier ?: 'inpost';
+
         match ($channel->type) {
             SalesChannel::TYPE_WOOCOMMERCE => app(WooCommerceClient::class, ['channel' => $channel])
                 ->addOrderNote($order->external_order_id, 'Numer przesyłki: ' . $shipment->tracking_number),
 
             SalesChannel::TYPE_ALLEGRO => app(AllegroClient::class, ['channel' => $channel])
-                ->addShipment($order->external_order_id, 'INPOST', $shipment->tracking_number),
+                ->addShipment($order->external_order_id, $carrierName, $shipment->tracking_number),
 
             SalesChannel::TYPE_EBAY => app(EbayClient::class, ['channel' => $channel])
-                ->createShippingFulfillment($order->external_order_id, 'INPOST', $shipment->tracking_number),
+                ->createShippingFulfillment($order, $carrierName, $shipment->tracking_number),
 
             default => null,
         };

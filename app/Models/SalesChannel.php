@@ -50,4 +50,22 @@ class SalesChannel extends Model
             return [];
         }
     }
+
+    public function setWebhookSecret(string $secret): void
+    {
+        $this->webhook_secret_encrypted = encrypt($secret);
+    }
+
+    public function getWebhookSecret(): ?string
+    {
+        if (!$this->webhook_secret_encrypted) {
+            return null;
+        }
+
+        try {
+            return decrypt($this->webhook_secret_encrypted);
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
 }

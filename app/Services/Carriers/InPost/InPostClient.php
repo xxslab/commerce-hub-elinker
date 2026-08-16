@@ -6,37 +6,63 @@ use App\Models\CommerceOrder;
 use App\Models\Shipment;
 use App\Models\ShippingLabel;
 use App\Models\ShipmentEvent;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 
 class InPostClient
 {
+    /**
+     * Idempotent: returns the existing active InPost shipment for this order
+     * instead of creating a duplicate if one was already created (e.g. double click).
+     */
     public function createShipment(CommerceOrder $order, array $parcel = []): Shipment
     {
-        $payload = $this->buildShipmentPayload($order, $parcel);
+        $lock = Cache::lock('inpost-create-shipment:' . $order->id, 30);
 
-        $response = $this->request()->post($this->apiUrl('/v1/organizations/' . config('commerce-hub.inpost.organization_id') . '/shipments'), $payload);
-        $response->throw();
-        $data = $response->json();
+        return $lock->block(10, function () use ($order, $parcel) {
+            $existing = Shipment::where('commerce_order_id', $order->id)
+                ->where('carrier', 'inpost')
+                ->whereNotIn('status', ['CANCELLED', 'ERROR'])
+                ->first();
 
-        return Shipment::create([
-            'company_id' => $order->company_id,
-            'commerce_order_id' => $order->id,
-            'carrier' => 'inpost',
-            'external_shipment_id' => (string) ($data['id'] ?? ''),
-            'tracking_number' => $data['tracking_number'] ?? null,
-            'status' => strtoupper($data['status'] ?? 'CREATED'),
-            'request_payload' => $payload,
-            'raw_payload' => $data,
-        ]);
+            if ($existing) {
+                return $existing;
+            }
+
+            $payload = $this->buildShipmentPayload($order, $parcel);
+
+            try {
+                $response = $this->request()->post($this->apiUrl('/v1/organizations/' . config('commerce-hub.inpost.organization_id') . '/shipments'), $payload);
+                $response->throw();
+            } catch (\Illuminate\Http\Client\RequestException $e) {
+                throw $this->actionableException($e);
+            }
+            $data = $response->json();
+
+            return Shipment::create([
+                'company_id' => $order->company_id,
+                'commerce_order_id' => $order->id,
+                'carrier' => 'inpost',
+                'external_shipment_id' => (string) ($data['id'] ?? ''),
+                'tracking_number' => $data['tracking_number'] ?? null,
+                'status' => strtoupper($data['status'] ?? 'CREATED'),
+                'request_payload' => $payload,
+                'raw_payload' => $data,
+            ]);
+        });
     }
 
     public function downloadLabel(Shipment $shipment, string $format = 'pdf'): Shipment
     {
-        $response = $this->request()->get($this->apiUrl('/v1/shipments/' . $shipment->external_shipment_id . '/label'), [
-            'format' => $format,
-        ]);
-        $response->throw();
+        try {
+            $response = $this->request()->get($this->apiUrl('/v1/shipments/' . $shipment->external_shipment_id . '/label'), [
+                'format' => $format,
+            ]);
+            $response->throw();
+        } catch (\Illuminate\Http\Client\RequestException $e) {
+            throw $this->actionableException($e);
+        }
 
         $path = 'labels/inpost/' . $shipment->id . '.' . $format;
         Storage::put($path, $response->body());
@@ -57,8 +83,12 @@ class InPostClient
             return $shipment;
         }
 
-        $response = $this->request()->get($this->apiUrl('/v1/tracking/' . $shipment->tracking_number));
-        $response->throw();
+        try {
+            $response = $this->request()->get($this->apiUrl('/v1/tracking/' . $shipment->tracking_number));
+            $response->throw();
+        } catch (\Illuminate\Http\Client\RequestException $e) {
+            throw $this->actionableException($e);
+        }
         $data = $response->json();
 
         $shipment->forceFill([
@@ -76,37 +106,71 @@ class InPostClient
         return $shipment;
     }
 
+    private function actionableException(\Illuminate\Http\Client\RequestException $e): \RuntimeException
+    {
+        $status = $e->response->status();
+
+        $message = match (true) {
+            in_array($status, [401, 403], true) => 'Token InPost jest nieprawidłowy lub wygasł. Sprawdź konfigurację (INPOST_API_TOKEN).',
+            $status === 422 => 'InPost odrzucił dane przesyłki (błędny adres, kod Paczkomatu lub parametry paczki). Sprawdź dane odbiorcy i spróbuj ponownie.',
+            $status === 429 => 'InPost ograniczył liczbę żądań (rate limit). Spróbuj ponownie za chwilę.',
+            $status >= 500 => 'InPost API jest chwilowo niedostępne (błąd serwera). Spróbuj ponownie później.',
+            default => 'InPost API zwróciło błąd HTTP ' . $status . '.',
+        };
+
+        return new \RuntimeException($message, 0, $e);
+    }
+
     private function buildShipmentPayload(CommerceOrder $order, array $parcel): array
     {
         $address = $order->shipping_address ?? [];
+        $point = trim((string) ($parcel['point'] ?? ''));
+        $isLocker = $point !== '';
 
-        return [
-            'receiver' => [
-                'name' => $order->customer_name,
-                'email' => $order->customer_email,
-                'phone' => $order->customer_phone,
-                'address' => [
-                    'street' => trim(($address['address_1'] ?? '') . ' ' . ($address['address_2'] ?? '')),
-                    'building_number' => $address['building_number'] ?? '',
-                    'city' => $address['city'] ?? '',
-                    'post_code' => $address['postcode'] ?? '',
-                    'country_code' => $address['country'] ?? 'PL',
-                ],
-            ],
+        $receiver = [
+            'name' => $order->customer_name,
+            'email' => $order->customer_email,
+            'phone' => $order->customer_phone,
+        ];
+
+        if (! $isLocker) {
+            $receiver['address'] = [
+                'street' => trim(($address['address_1'] ?? '') . ' ' . ($address['address_2'] ?? '')),
+                'building_number' => $address['building_number'] ?? '',
+                'city' => $address['city'] ?? '',
+                'post_code' => $address['postcode'] ?? '',
+                'country_code' => $address['country'] ?? 'PL',
+            ];
+        }
+
+        $payload = [
+            'receiver' => $receiver,
             'parcels' => [[
                 'template' => $parcel['template'] ?? 'small',
                 'weight' => ['amount' => $parcel['weight'] ?? 1, 'unit' => 'kg'],
             ]],
-            'service' => $parcel['service'] ?? 'inpost_courier_standard',
+            'service' => $parcel['service'] ?? ($isLocker ? 'inpost_locker_standard' : 'inpost_courier_standard'),
             'reference' => $order->order_number,
             'comments' => 'Commerce Hub order #' . $order->order_number,
         ];
+
+        if ($isLocker) {
+            $payload['custom_attributes'] = ['target_point' => $point];
+        }
+
+        return $payload;
     }
 
     private function request()
     {
         return Http::timeout(30)
-            ->retry(3, 500)
+            ->retry(3, 500, function (\Throwable $exception) {
+                if ($exception instanceof \Illuminate\Http\Client\RequestException) {
+                    return ! in_array($exception->response->status(), [400, 401, 403, 404, 422], true);
+                }
+
+                return true;
+            })
             ->withToken(config('commerce-hub.inpost.token'))
             ->acceptJson();
     }
