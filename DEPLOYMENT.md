@@ -13,6 +13,21 @@ The License Hub side of this same work (`product_link_tokens`, the
 /api/v1/product-links/consume`) lives in a separate repository and has its
 own `DEPLOYMENT.md`, covering `license.dosieci.pl` on the same Plesk pattern.
 
+## Production deployment record — 2026-08-17
+
+- Target: `https://elink.dosieci.pl`
+- Production SHA: `8a531e4cfdfe8af7349704da3c823291d3e416be`
+- Previous production SHA: `379bfda58d37247b68a64ee47bf711033447bc4d`
+- Migrations: PASS; no new migrations were required by this hotfix.
+- Login/routing: PASS (`/login` HTTP 200; protected marketplace routes redirect to login; new channel-edit and marketplace-create routes are present).
+- View rendering: PASS for marketplace app form, channel-name edit form, and order detail.
+- Order source display: PASS; WooCommerce orders now show the channel domain (for example `gmtools.de` or `max4x4.pl`) and the channel name links to the edit form.
+- Marketplace app form: PASS; fixed missing `marketplace` route parameters that caused the Allegro/eBay create pages to return HTTP 500.
+- Scheduler: PASS; existing `current` release path remains configured with PHP 8.1.
+- Queue: PASS; `elinker-queue.service` active after restart.
+- Gating: remains `LICENSE_HUB_ENFORCE_GATING=false`.
+- Live Allegro/eBay OAuth verification: NOT RUN; real marketplace app credentials and seller authorization are still required.
+
 ## Production deployment record — 2026-08-16
 
 - Target: `https://elink.dosieci.pl`
