@@ -49,6 +49,14 @@ class SalesChannelWebController extends Controller
         abort_unless($salesChannel->company_id === $this->company()->id, 404);
         try {
             $result = app(SalesChannelConnectorResolver::class)->for($salesChannel)->testConnection();
+            if (($result['ok'] ?? false) === true) {
+                $salesChannel->forceFill([
+                    'sync_status' => 'idle',
+                    'last_error' => null,
+                    'last_error_code' => null,
+                    'consecutive_failures' => 0,
+                ])->save();
+            }
             return back()->with(($result['ok'] ?? false) ? 'ok' : 'error', ($result['ok'] ?? false) ? 'Połączenie działa.' : ($result['message'] ?? 'Połączenie nie działa. Sprawdź konfigurację.'));
         } catch (\Throwable $e) {
             report($e);
