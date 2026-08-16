@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - 'claude/**'
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # composer.json requires "php": "^8.1" -- pin CI to that floor rather
+      # than the latest available so a dependency that secretly needs a
+      # newer PHP feature is caught here, not on the 8.1 production host.
+      - name: Set up PHP 8.1
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          extensions: mbstring, xml, ctype, json, bcmath, pdo_sqlite, sqlite3, openssl, tokenizer, fileinfo
+          coverage: none
+
+      # --no-check-lock: composer.lock's content-hash has been out of sync
+      # with composer.json since the initial commit of this repo (pre-dates
+      # this branch's work, unrelated to it) -- schema validation still
+      # runs, only the lock-freshness check is skipped so CI doesn't fail on
+      # a pre-existing condition outside this workflow's scope.
+      - name: Validate composer.json/composer.lock
+        run: composer validate --no-check-publish --no-check-lock
+
+      - name: Get composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: ${{ runner.os }}-composer-
+
+      # Deliberately no --ignore-platform-reqs: PHP 8.1 above is the real
+      # minimum this app supports, so a dependency conflict here is a real
+      # problem to fix, not noise to silence.
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Check PHP syntax
+        run: find app config database routes tests -name '*.php' -print0 | xargs -0 -n1 php -l
+
+      - name: Prepare application
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      # phpunit.xml pins DB_CONNECTION=sqlite / DB_DATABASE=:memory: for the
+      # test run itself, independent of whatever .env just set.
+      - name: Run test suite
+        run: php artisan test
+
+      - name: Verify route registration
+        run: php artisan route:list
