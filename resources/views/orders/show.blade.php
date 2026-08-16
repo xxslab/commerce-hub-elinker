@@ -1,7 +1,15 @@
 @extends('layouts.app')
 @section('content')
 <h1>Zamówienie {{ $order->order_number }}</h1><p><a href="{{ route('orders.index') }}">← wróć do listy</a></p>
-<div class="grid"><div class="card"><h2>Źródło</h2><p>{{ $order->salesChannel?->name }}<br>{{ $order->source }}<br>{{ $order->external_order_id }}</p></div><div class="card"><h2>Status</h2><p><span class="badge">{{ $order->status_normalized }}</span><br>Źródło: {{ $order->status_source }}</p></div><div class="card"><h2>Kwota</h2><p>{{ $order->total }} {{ $order->currency }}</p></div></div>
+<div class="grid"><div class="card"><h2>Źródło</h2><p>
+    @if($order->salesChannel)
+        <a href="{{ route('channels.edit', $order->salesChannel) }}">{{ $order->salesChannel->name }}</a><br>
+        {{ $order->salesChannel->display_domain }}
+    @else
+        {{ ucfirst($order->source) }}
+    @endif
+    <br>{{ $order->external_order_id }}
+</p></div><div class="card"><h2>Status</h2><p><span class="badge">{{ $order->status_normalized }}</span><br>Źródło: {{ $order->status_source }}</p></div><div class="card"><h2>Kwota</h2><p>{{ $order->total }} {{ $order->currency }}</p></div></div>
 <div class="card"><h2>Zmień status lokalny</h2><form method="post" action="{{ route('orders.status', $order) }}">@csrf @method('PATCH')<select name="status_normalized">@foreach(['NEW','PAID','PROCESSING','READY_TO_SHIP','SHIPPED','COMPLETED','CANCELLED','REFUNDED','ON_HOLD','ERROR'] as $status)<option value="{{ $status }}" @selected($order->status_normalized === $status)>{{ $status }}</option>@endforeach</select><button class="btn">Zapisz lokalnie</button></form></div>
 <div class="card"><h2>Klient</h2><p>{{ $order->customer_name }}<br>{{ $order->maskedEmail() }}<br>{{ $order->maskedPhone() }}</p><h3>Adres dostawy</h3><div class="code">{{ json_encode($order->shipping_address, JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE) }}</div></div>
 <div class="card"><h2>Produkty</h2><table><tr><th>SKU</th><th>Nazwa</th><th>Ilość</th><th>Cena</th><th>Razem</th></tr>@foreach($order->items as $item)<tr><td>{{ $item->sku }}</td><td>{{ $item->name }}</td><td>{{ $item->quantity }}</td><td>{{ $item->price }}</td><td>{{ $item->total }}</td></tr>@endforeach</table></div>

@@ -57,8 +57,8 @@
 <div class="card table-scroll">
 <table><thead><tr>
     <th>Data</th>
-    <th>Źródło</th>
-    <th>Kanał</th>
+    <th>Domena źródłowa</th>
+    <th>Nazwa kanału</th>
     <th>Nr zamówienia</th>
     <th>Klient</th>
     <th>Kraj</th>
@@ -75,10 +75,16 @@
         <td>
             @php($sourceClass = in_array($order->source, ['woocommerce','allegro','ebay'], true) ? $order->source : 'other')
             <span class="source-badge source-{{ $sourceClass }}">
-                {{ ['woocommerce' => 'WooCommerce', 'allegro' => 'Allegro', 'ebay' => 'eBay'][$order->source] ?? ucfirst($order->source) }}
+                {{ $order->salesChannel?->display_domain ?? ucfirst($order->source) }}
             </span>
         </td>
-        <td>{{ optional($order->salesChannel)->name }}</td>
+        <td>
+            @if($order->salesChannel)
+                <a href="{{ route('channels.edit', $order->salesChannel) }}">{{ $order->salesChannel->name }}</a>
+            @else
+                -
+            @endif
+        </td>
         <td><a href="{{ route('orders.show', $order) }}">{{ $order->order_number }}</a></td>
         <td>{{ $order->customer_name }}<br><span class="muted">{{ $order->maskedEmail() }}</span></td>
         <td>{{ $order->shipping_country ?: $order->billing_country ?: '-' }}</td>

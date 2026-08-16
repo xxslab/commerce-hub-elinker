@@ -31,6 +31,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/channels', [SalesChannelWebController::class, 'index'])->name('channels.index');
     Route::get('/channels/woocommerce/create', [SalesChannelWebController::class, 'createWooCommerce'])->name('channels.woocommerce.create');
     Route::post('/channels/woocommerce', [SalesChannelWebController::class, 'storeWooCommerce'])->middleware('subscription.active')->name('channels.woocommerce.store');
+    Route::get('/channels/{salesChannel}/edit', [SalesChannelWebController::class, 'edit'])->name('channels.edit');
+    Route::patch('/channels/{salesChannel}', [SalesChannelWebController::class, 'update'])->middleware('company.admin')->name('channels.update');
     Route::post('/channels/{salesChannel}/test', [SalesChannelWebController::class, 'test'])->name('channels.test');
     Route::post('/channels/{salesChannel}/sync', [SalesChannelWebController::class, 'sync'])->middleware('subscription.active')->name('channels.sync');
     Route::post('/channels/{salesChannel}/toggle', [SalesChannelWebController::class, 'toggle'])->name('channels.toggle');

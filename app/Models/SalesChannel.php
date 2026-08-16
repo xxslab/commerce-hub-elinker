@@ -32,6 +32,26 @@ class SalesChannel extends Model
         return $this->hasMany(CommerceOrder::class, 'sales_channel_id');
     }
 
+    public function getDisplayDomainAttribute(): string
+    {
+        if ($this->base_url) {
+            $host = parse_url($this->base_url, PHP_URL_HOST);
+
+            if (is_string($host) && $host !== '') {
+                return $host;
+            }
+
+            return $this->base_url;
+        }
+
+        return match ($this->type) {
+            self::TYPE_ALLEGRO => 'Allegro',
+            self::TYPE_EBAY => 'eBay',
+            self::TYPE_WOOCOMMERCE => 'WooCommerce',
+            default => (string) $this->type,
+        };
+    }
+
     public function setCredentials(array $credentials): void
     {
         $this->credentials_encrypted = encrypt(json_encode($credentials));

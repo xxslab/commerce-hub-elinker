@@ -45,6 +45,6 @@
         </label>
 
         <button class="btn" type="submit">Zapisz</button>
-        <a href="{{ route('marketplace-apps.index') }}">Anuluj</a>
+        <a href="{{ route('marketplace-apps.index', ['marketplace' => $marketplace]) }}">Anuluj</a>
     </form>
 @endsection

@@ -20,6 +20,26 @@ class SalesChannelWebController extends Controller
 
     public function createWooCommerce() { return view('sales_channels.create_woocommerce', ['company' => $this->company()]); }
 
+    public function edit(SalesChannel $salesChannel)
+    {
+        abort_unless($salesChannel->company_id === $this->company()->id, 404);
+
+        return view('sales_channels.edit', compact('salesChannel'));
+    }
+
+    public function update(Request $request, SalesChannel $salesChannel)
+    {
+        abort_unless($salesChannel->company_id === $this->company()->id, 404);
+
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+        ]);
+
+        $salesChannel->forceFill(['name' => $data['name']])->save();
+
+        return redirect()->route('channels.index')->with('ok', 'Nazwa kanału została zmieniona.');
+    }
+
     public function storeWooCommerce(Request $request)
     {
         $data = $request->validate([

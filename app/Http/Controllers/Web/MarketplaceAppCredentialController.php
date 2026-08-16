@@ -74,7 +74,7 @@ class MarketplaceAppCredentialController extends Controller
                 ->update(['is_active' => false]);
         }
 
-        return redirect()->route('marketplace-apps.index')->with('ok', 'Dane aplikacji zapisane. Teraz możesz połączyć konto sprzedawcy.');
+        return redirect()->route('marketplace-apps.index', ['marketplace' => $marketplace])->with('ok', 'Dane aplikacji zapisane. Teraz możesz połączyć konto sprzedawcy.');
     }
 
     public function edit(MarketplaceAppCredential $credential)
@@ -125,7 +125,7 @@ class MarketplaceAppCredentialController extends Controller
                 ->update(['is_active' => false]);
         }
 
-        return redirect()->route('marketplace-apps.index')->with('ok', 'Dane aplikacji zaktualizowane.');
+        return redirect()->route('marketplace-apps.index', ['marketplace' => $credential->marketplace])->with('ok', 'Dane aplikacji zaktualizowane.');
     }
 
 }
