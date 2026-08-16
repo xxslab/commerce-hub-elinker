@@ -150,7 +150,9 @@ LICENSE_HUB_ENFORCE_GATING=false
 
 `LICENSE_HUB_KEY_ID`/`LICENSE_HUB_SECRET` muszą być zgodne z `DOSIECI_SIGNING_KEY_ID`/`DOSIECI_SIGNING_SECRET` skonfigurowanym po stronie License Hub (ten sam statyczny klucz, którego już używają WHMCS-connector/storefront-connector — patrz `DosieciServiceProvider` w repo License Hub). Bez tych zmiennych `/settings/billing` po prostu nie odświeży stanu konta (błąd łagodnie zalogowany, nic nie blokuje panelu).
 
-Powiązanie firmy z workspace: admin firmy wchodzi w **Ustawienia → Plan i billing** i wpisuje `workspace_id` otrzymany od DoSieci. `LICENSE_HUB_ENFORCE_GATING=false` (domyślnie) oznacza, że nic nie jest jeszcze blokowane — włącz dopiero po realnym powiązaniu firm i zasileniu katalogu planów po stronie License Hub.
+Powiązanie firmy z workspace: **nie** przez wpisanie `workspace_id` ręcznie (ten formularz został usunięty — surowy `workspace_id` nie jest sekretem, więc sam w sobie nie dowodzi własności workspace). Admin firmy w License Hub generuje jednorazowy **kod połączenia** dla konkretnego workspace + produktu `elinker` (`/admin/product-links` w panelu License Hub), przekazuje go klientowi poza panelem (np. e-mailem), a klient wkleja go w eLinker: **Ustawienia → Plan i billing → Połącz konto z License Hub**. Kod jest jednorazowy, wygasa i jest przypisany do konkretnego workspace — zgadnięcie/poznanie cudzego `workspace_id` nic nie daje. Odłączenie konta (Ustawienia → Plan i billing → Odłącz konto) nigdy nie usuwa zamówień/kanałów/przesyłek firmy, tylko przestaje sprawdzać stan planu.
+
+`LICENSE_HUB_ENFORCE_GATING=false` (domyślnie) oznacza, że nic nie jest jeszcze blokowane — włącz dopiero po realnym powiązaniu firm i zasileniu katalogu planów po stronie License Hub. Pełny runbook wdrożenia (kolejność między eLinker a License Hub, migracje, scheduler/worker, smoke testy) jest w `DEPLOYMENT.md`.
 
 ## 8. Co działa teraz
 
