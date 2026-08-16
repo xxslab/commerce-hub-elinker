@@ -1,6 +1,6 @@
 # DEPLOYMENT.md — rolling out the License Hub connection flow
 
-Status: **elink.dosieci.pl is already live in production** (see `CLAUDE.md`).
+Status: **DEPLOYED** (production record below; see `CLAUDE.md`).
 This document is specifically the rollout runbook for the work on branch
 `claude/project-foundations-xjmw4h`: the secure License Hub connection-code
 flow (replacing raw `workspace_id` entry), the `elinker.*` feature-key
@@ -11,10 +11,22 @@ install — see `INSTALL.md` for that.
 The License Hub side of this same work (`product_link_tokens`, the
 `/admin/plans` and `/admin/product-links` panels, `POST
 /api/v1/product-links/consume`) lives in a separate repository and has its
-own `DEPLOYMENT.md`, covering `license.dosieci.pl` on the same Plesk
-pattern. **That document's own header still says `Status: NOT DEPLOYED`** —
-license.dosieci.pl has not gone live yet as of this branch. That fact drives
-the deployment order below.
+own `DEPLOYMENT.md`, covering `license.dosieci.pl` on the same Plesk pattern.
+
+## Production deployment record — 2026-08-16
+
+- Target: `https://elink.dosieci.pl`
+- Production SHA: `6522f4c3c70c599bddae2b646ff829b2d738655b8`
+- Previous rollback reference: `75b94197322316448306be9fc5384c1895880452` (the live tree also had an uncommitted `Kernel.php` divergence).
+- Migrations: PASS; additive migrations ran successfully.
+- Login/routing: PASS (`/login` HTTP 200; protected routes redirect to login).
+- Scheduler: PASS; explicit `current` release path with PHP 8.1.
+- Queue: PASS; database queue with enabled/restarting systemd worker.
+- S2S signing: configured and verified with a signed request to License Hub; values are server-only secrets.
+- Gating: remains `LICENSE_HUB_ENFORCE_GATING=false`.
+- Connection-code end-to-end smoke: NOT RUN; no controlled test workspace or business plan catalog existed at deployment time.
+- Existing `failed_jobs`: 14 at verification; this pre-existing backlog was not deleted or rewritten.
+- Live WooCommerce/Allegro/eBay/InPost/WHMCS verification: NOT VERIFIED; real credentials/business mapping are still required.
 
 ## 1. Deployment order between the two apps
 
@@ -35,7 +47,7 @@ billing UI specifically is inert until License Hub exists.
 Recommended order:
 
 1. Deploy License Hub to `license.dosieci.pl` (its own `DEPLOYMENT.md`,
-   §§1–6) — first-time deployment, currently pending.
+   §§1–6) — completed on 2026-08-16.
 2. Confirm `https://license.dosieci.pl/api/v1/entitlements/check` and
    `.../api/v1/product-links/consume` respond (signed 401 for an unsigned
    request is a correct "up" signal — see its smoke tests).

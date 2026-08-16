@@ -42,7 +42,7 @@ Rozwijaj istniejącą aplikację Laravel Commerce Hub — panel do obsługi zam�
 
 1. Dokończyć produkcyjne testy OAuth Allegro/eBay po otrzymaniu danych aplikacji (kod OAuth/refresh/connect/callback jest gotowy, ale nie zweryfikowany na żywym API).
 2. Zweryfikować na żywym API: rozwiązywanie `carrierId` Allegro (`GET /order/carriers` — nazwy/pola nie potwierdzone na realnym koncie) oraz `shippingCarrierCode` eBay dla docelowego marketplace (dziś fallback `Other`).
-3. Uporządkować scheduler i worker kolejki w Plesku; obecnie zadania są zdefiniowane, ale wymagają włączenia po stronie hostingu.
+3. Monitorować scheduler i worker kolejki w Plesku; konfiguracja produkcyjna została włączona, ale wymaga dalszego monitoringu.
 4. Rozszerzyć monitoring o alerty, metryki czasu synchronizacji i czytelne komunikaty dla administratora.
 5. Przed usunięciem któregokolwiek WordPressa uzyskać dokładne domeny/katalogi, wykonać backup i przygotować plan odtworzenia.
 6. License Hub: zasilić prawdziwy katalog planów (`plans`/`plan_features` w repo License Hub, dziś pusty), realnie powiązać firmy z workspace, dopiero potem rozważyć włączenie `LICENSE_HUB_ENFORCE_GATING`.
