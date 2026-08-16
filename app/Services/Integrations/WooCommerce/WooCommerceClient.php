@@ -4,7 +4,6 @@ namespace App\Services\Integrations\WooCommerce;
 
 use App\Models\SalesChannel;
 use Illuminate\Http\Client\PendingRequest;
-use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
 
 class WooCommerceClient
@@ -99,19 +98,7 @@ class WooCommerceClient
 
     private function credentials(): array
     {
-        $raw = $this->channel->credentials_encrypted ?? $this->channel->credentials ?? null;
-        if (!$raw) {
-            return [];
-        }
-
-        try {
-            $decoded = Crypt::decryptString($raw);
-            $json = json_decode($decoded, true);
-            return is_array($json) ? $json : [];
-        } catch (\Throwable $e) {
-            $json = json_decode($raw, true);
-            return is_array($json) ? $json : [];
-        }
+        return $this->channel->getCredentials();
     }
 
     private function url(string $path): string
